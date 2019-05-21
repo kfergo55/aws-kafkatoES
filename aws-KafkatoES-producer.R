@@ -93,11 +93,14 @@ send_andwait <- function(topic, data, ixstart, ixend) {
 plan(multisession) 
 
 # set topic name
-topic_name <- "test-sales-topic4"
+topic_name <- "test-sales-topic5"
+
+rowstart <- 1
+rowend <- nrow(AdvenSales) # or rowend <- 10
 
 # call the producer with an index range of messages to send to kafka 
 result <- as.list(NA)
-result %<-% send_andwait(topic_name,AdvenSales,1,10)
+result %<-% send_andwait(topic_name,AdvenSales,rowstart,rowend)
 
 
 # checking the progress/results (optional)

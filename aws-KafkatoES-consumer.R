@@ -115,9 +115,12 @@ plan(multisession)
 topic_name <- "test-sales-topic4"
 index_name <- "test-sales-index"
 
+rowstart <- 1
+rowend <- nrow(AdvenSales) # or rowend <- 10
+
 # call the producer with an index range of messages to send to kafka 
 result <- as.list(NA)
-result %<-% grab_andsend(topic_name,index_name,1,10)
+result %<-% grab_andsend(topic_name,index_name,rowstart,rowend)
 
 
 # checking the progress/results (optional)
