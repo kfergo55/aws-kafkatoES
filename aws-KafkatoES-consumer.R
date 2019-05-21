@@ -9,8 +9,9 @@
 #
 # *****************CONSUMER******************
 # High Level Description:
-# This code creates a test stream using the AWS Service - 
-# Managed Streams for Kafka (MSK) and Elasticsearch for AWS (ES).  
+# This code reads from the test Kafka stream (AWS Service - 
+# Managed Streams for Kafka (MSK)) transforms the data to enrich with text
+# and stores into Elasticsearch for AWS (ES).  
 
 # Description for this code file:
 # This file assumes:
