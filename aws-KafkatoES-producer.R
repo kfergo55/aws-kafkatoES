@@ -73,10 +73,11 @@ AdvenSales <- AdvenSales %>% arrange(desc(Modified.Date))
 send_andwait <- function(topic, data, ixstart, ixend) {
   
   # open a producer on AWS Managed Streaming Kafka
-  prod1=rkafka.createProducer("127.0.0.1:9092")
+  prod1=rkafka.createProducer("b-3.kafkav190503.nqh12a.c2.kafka.ap-southeast-1.amazonaws.com:9092,b-2.kafkav190503.nqh12a.c2.kafka.ap-southeast-1.amazonaws.com:9092,b-1.kafkav190503.nqh12a.c2.kafka.ap-southeast-1.amazonaws.com:9092")
   
   for(i in ixstart:ixend) { 
-    res[[i]] <- message(rkafka.send(prod1,topic,"",toJSON(data[i,])))
+    res[[i]] <- message(rkafka.send(prod1,topic,"b-3.kafkav190503.nqh12a.c2.kafka.ap-southeast-1.amazonaws.com:9092,b-2.kafkav190503.nqh12a.c2.kafka.ap-southeast-1.amazonaws.com:9092,b-1.kafkav190503.nqh12a.c2.kafka.ap-southeast-1.amazonaws.com:9092",
+                                    toJSON(data[i,])))
     Sys.sleep(10)
     
   }
