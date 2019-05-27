@@ -70,14 +70,14 @@ AdvenSales <- AdvenSales %>% arrange(desc(Modified.Date))
 ##############################################
 # Function send_andwait
 # function to send data to kafka every 10 seconds
-send_andwait <- function(topic, data, ixstart, ixend) {
+send_andwait <- function(cstring, topic, data, ixstart, ixend) {
   
   # open a producer on AWS Managed Streaming Kafka
-  prod1=rkafka.createProducer("b-3.kafkav190503.nqh12a.c2.kafka.ap-southeast-1.amazonaws.com:9092,b-2.kafkav190503.nqh12a.c2.kafka.ap-southeast-1.amazonaws.com:9092,b-1.kafkav190503.nqh12a.c2.kafka.ap-southeast-1.amazonaws.com:9092")
+  prod1=rkafka.createProducer(cstring)
+  res <- NA
   
   for(i in ixstart:ixend) { 
-    res[[i]] <- message(rkafka.send(prod1,topic,"b-3.kafkav190503.nqh12a.c2.kafka.ap-southeast-1.amazonaws.com:9092,b-2.kafkav190503.nqh12a.c2.kafka.ap-southeast-1.amazonaws.com:9092,b-1.kafkav190503.nqh12a.c2.kafka.ap-southeast-1.amazonaws.com:9092",
-                                    toJSON(data[i,])))
+    res <- message(rkafka.send(prod1, topic, cstring, toJSON(data[i,])))
     Sys.sleep(10)
     
   }
@@ -93,20 +93,38 @@ send_andwait <- function(topic, data, ixstart, ixend) {
 plan(multisession) 
 
 # set topic name
-topic_name <- "test-sales-topic5"
+topic_name <- "test-sales-topic-2"
 
+# set connection string
+con_string <- "127.0.0.1:9092"
+#con_string <- "b-3.kafkav190503.nqh12a.c2.kafka.ap-southeast-1.amazonaws.com:9092,b-2.kafkav190503.nqh12a.c2.kafka.ap-southeast-1.amazonaws.com:9092,b-1.kafkav190503.nqh12a.c2.kafka.ap-southeast-1.amazonaws.com:9092"
+
+# set the range of data we will get from the "stream"
 rowstart <- 1
-rowend <- nrow(AdvenSales) # or rowend <- 10
+rowend <- nrow(AdvenSales) 
+# rowend <- 10
 
 # call the producer with an index range of messages to send to kafka 
 result <- as.list(NA)
-result %<-% send_andwait(topic_name,AdvenSales,rowstart,rowend)
+result %<-% send_andwait(con_string, topic_name, AdvenSales, rowstart, rowend)
 
 
-# checking the progress/results (optional)
+########################################
+# END MAIN BLOCK
 
-if(!resolved(result)) print("not resolved") else print("resolved")
+###
+# checking the progress (optional)
+
+# ifelse(resolved(result), print("resolved"), print("not resolved"))
 
 # force the future to block until resolved
-value(result)
+# value(result)
+
+###
+# list the topics for a local install of kafka and create a topic
+#oldwd <- getwd()
+#setwd("C:/Users/Nigel/kafkaNODE2_2.12-2.2.0/bin/windows")
+#shell('kafka-topics.bat --list --zookeeper localhost:2181')
+#shell('kafka-topics.bat --create --zookeeper localhost:2181 --replication-factor 1 --partitions 1 --topic test-sales-topic-2')
+#setwd(oldwd)
 
