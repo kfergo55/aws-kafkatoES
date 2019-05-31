@@ -38,31 +38,56 @@ library(dplyr) # data wrangling
 
 library(promises) # for asyinc processing for stream insertion
 library(future) # for async processing (stream insertion)
-
 ##############################################
-# Function grab_andsendES
-# function to send grab data from to kafka, transform and send to ES
-grab_andsend <- function(topic, esindex, ixstart, ixend) {
+# Function 
 
-  # no harm in ensuring we close the consumer if we are running batches interactively
-  rkafka.closeConsumer(consumer1)
-  
+# writetolog
+
+# function to create a new log file and dump cached logs 
+writetolog <- function(wlogES_df) {
+
+logfilename <- paste0("LogES", format(Sys.time(), "%Y%M%d-%H-%M-%S"),".csv")
+write.csv(wlogES_df, file=logfilename)
+}
+##############################################
+# Function 
+
+# initlog
+
+# function to initialize the log dataframe 
+initlog <- function() {
+  flogES_df <- NA
+  flogES_df <- as.data.frame(matrix(c("initialized", format(Sys.time(), "%Y%M%d-%H-%M-%S")), 
+                                   nrow=1, dimnames = list(NULL, c("kafka-in", "es-out"))))
+  return(flogES_df)
+}
+##############################################
+# Function 
+
+# grab_andsend
+
+# function to send grab data from to kafka, transform and send to ES
+grab_andsend <- function(estring, cstring, ftopic_name, esindex, ixstart, ixend, logrowlimit) {
+
   # open the consumer
-  #  consumer1=rkafka.createConsumer("127.0.0.1:2181",topic_name, consumerTimeoutMs = 20000)
-  consumer1=rkafka.createConsumer("b-3.kafkav190503.nqh12a.c2.kafka.ap-southeast-1.amazonaws.com:9092,b-2.kafkav190503.nqh12a.c2.kafka.ap-southeast-1.amazonaws.com:9092,b-1.kafkav190503.nqh12a.c2.kafka.ap-southeast-1.amazonaws.com:9092","kf-txhouse")
+  #  consumer1=rkafka.createConsumer(cstring, topic_name, consumerTimeoutMs = 20000)
+  consumer1=rkafka.createConsumer(cstring, ftopic_name)
   
-  # open connection to ES
-  esconnect <- elastic::connect(es_host = "search-esv190503-jeodnaa566dp6eluw47rqophfy.ap-southeast-1.es.amazonaws.com", es_port = 80, path = "", es_transport_schema  = "http")
-  
-  # if index doesn't exist, create it
-  if(!elastic::index_exists(esconnect, index=esindex)) {
-     elastic::index_create(esconnect, index=esindex) 
-  }
+  # initialize log file
+  logES_df <- initlog()
+  # initialize return value
+  result <- NA
   
   # loop through the kafka messages
   for(i in ixstart:ixend) { 
+
+    # Wait so we don't overrun the producer
+    Sys.sleep(10)
+    
     # consume the message (i.e. grab a message off the Kafka queue)
     msg <- rkafka.read(consumer1)
+    
+    if(msg == "") {result <- "Kafka connectivity FAILED"; return(result) }
     
     ##########################################
     # Next Step: Transform our data based on the message from the Kafka queue
@@ -89,48 +114,102 @@ grab_andsend <- function(topic, esindex, ixstart, ixend) {
     no_customerdets <- !length(.subset2(msg_ext_df, 1L)) > 0L
     
     # Still send the msg but without additional text
-    if (no_customerdets) {msg_ext_df <- c("Missing Customer Details for ",msg_df$Customer.ID)}
+    if(no_customerdets) {
+      msg_ext_df <- c("Missing Customer Details for ", msg_df$Customer.ID)
+      }
     
     # send data to ES
-    # todo - extend to a tryCatch and include error processing
-    logES[i] <- docs_create(awsconnect, index=esindex, type='deprecated', id=i, 
-                body=as.list(msg_ext_df))
+    logES <- tryCatch( 
+        docs_create(index=esindex, type='deprecated', 
+                body=as.list(msg_ext_df[1,])),
+        warning=function(w) {result <- "Elasticsearch connectivity FAILED"; return(result)}
+        )
     
+    # log the successful writes to ES into a dataframe
+    logES_df <- add_row(logES_df, "kafka-in" = toString(toJSON(msg_ext_df[1,])),
+          "es-out" = toString(toJSON(logES))) 
+    
+    # write log file to disk if we've hit the filesize line constraint
+    if(nrow(logES_df) > logrowlimit) {
+      writetolog(logES_df)
+      LogES_df <- initlog()
+    }
+    
+    #check for index end value
+    if(ixend == i) {
+      result <- "all records processed"}
+  
   }
   # close connection
   rkafka.closeConsumer(consumer1)
-  # write logES file to disk
-  logfilename <- paste0("LogES", format(Sys.time(), "%Y%M%d-%H-%M-%S"),".csv")
-  write.csv(logES, file=logfilename)
-  # return the result list
-  return(res)
+  
+  #  call function to write the rest of logES dataframe to disk - even if no successes
+  writetolog(logES_df)
+  
+  # return 
+  return(result)
 }
 
 ###############################################
+# Main Block
+
+# Initialize
+
 # set our future plan to multisession so we can continue with processing 
-# 
 plan(multisession) 
 
-# set topic name
-topic_name <- "test-sales-topic4"
-index_name <- "test-sales-index"
+# set topic name and index name - elasticsearch index name must be lowercase
+topic_name <- "test-sales-topic-1C"
+index_name <- "test-sales-index-1c"
 
+# set connection strings
+es_string <- "127.0.0.1"
+#es_string <- "search-esv190503-jeodnaa566dp6eluw47rqophfy.ap-southeast-1.es.amazonaws.com"
+con_string <- "127.0.0.1:2181"
+#con_string <- "b-3.kafkav190503.nqh12a.c2.kafka.ap-southeast-1.amazonaws.com:9092,b-2.kafkav190503.nqh12a.c2.kafka.ap-southeast-1.amazonaws.com:9092,b-1.kafkav190503.nqh12a.c2.kafka.ap-southeast-1.amazonaws.com:9092"
+
+# open connection to ES
+esconnect <- elastic::connect(es_host = es_string, es_port = 9200, path = "", es_transport_schema  = "http")
+
+# set the range of data we will "stream"
 rowstart <- 1
-rowend <- nrow(AdvenSales) # or rowend <- 10
+rowend <- 10
+rowend <- nrow(AdvenSales) 
 
-# call the producer with an index range of messages to send to kafka 
-result <- as.list(NA)
-result %<-% grab_andsend(topic_name,index_name,rowstart,rowend)
+# set the size of the logfile by rows
+logrowlimit <- 200
 
 
-# checking the progress/results (optional)
+# call the function 
+result <- NA
 
-if(!resolved(result)) print("not resolved") else print("resolved")
+result <- grab_andsend(es_string, con_string, topic_name, index_name, rowstart, rowend, logrowlimit)
+
+# End of Main Block
+##############################################
+
+###################################
+#  Optional and Cleanup 
+
+###
+# If interactive - uncomment to check the progress/results using
+# resolved (this step is optional)
+
+# check for resolved, this should not block
+# if(!resolved(result)) print("not resolved") else print("resolved")
 
 # force the future to block until resolved
-value(result)
+# value(result)
 
-unlist(result)
+###
+# To debug issues with kafka corruption  - where msg returns as "" and no error
+# the high level consumer relies on kafka offset
+# simple consumer reads work when offset fails (imho) 
+#  (optional debug step)
+
+#consumer1=rkafka.createSimpleConsumer("127.0.0.1","9092","10000","100000", topic_name)
+#rkafka.receiveFromSimpleConsumer(consumer1,topic_name,"0","2","500")
+#msg <- rkafka.readFromSimpleConsumer(consumer1)
 
 
 # DON'T FORGET TO DELETE THE AWS RESOURCES!!! 

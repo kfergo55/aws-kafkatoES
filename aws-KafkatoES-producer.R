@@ -49,7 +49,7 @@ AdvenSalesDW <- read.csv("https://raw.githubusercontent.com/kfergo55/aws-kafkato
 
 # order the data frame by modified date to simulate order inserts/updates from an 
 # enterprise order system 
-AdvenSales <- AdvenSales %>% arrange(desc(Modified.Date))
+AdvenSales <- AdvenSales %>% arrange(Modified.Date)
 
 ############################################
 # Initiate the async stream of "Sales Data" to the kafka cluster
@@ -73,7 +73,10 @@ AdvenSales <- AdvenSales %>% arrange(desc(Modified.Date))
 send_andwait <- function(cstring, topic, data, ixstart, ixend) {
   
   # open a producer on AWS Managed Streaming Kafka
+  # force the logger error by running twice
   prod1=rkafka.createProducer(cstring)
+  prod1=rkafka.createProducer(cstring)
+  
   res <- NA
   
   for(i in ixstart:ixend) { 
@@ -92,8 +95,8 @@ send_andwait <- function(cstring, topic, data, ixstart, ixend) {
 # 
 plan(multisession) 
 
-# set topic name
-topic_name <- "test-sales-topic-2"
+# set topic name - create topic below as broker errors on autocreate of topic
+topic_name <- "test-sales-topic-1C"
 
 # set connection string
 con_string <- "127.0.0.1:9092"
@@ -125,6 +128,6 @@ result %<-% send_andwait(con_string, topic_name, AdvenSales, rowstart, rowend)
 #oldwd <- getwd()
 #setwd("C:/Users/Nigel/kafkaNODE2_2.12-2.2.0/bin/windows")
 #shell('kafka-topics.bat --list --zookeeper localhost:2181')
-#shell('kafka-topics.bat --create --zookeeper localhost:2181 --replication-factor 1 --partitions 1 --topic test-sales-topic-2')
+#shell('kafka-topics.bat --create --zookeeper localhost:2181 --replication-factor 1 --partitions 1 --topic test-sales-topic-1C')
 #setwd(oldwd)
 
